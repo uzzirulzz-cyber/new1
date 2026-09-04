@@ -94,3 +94,19 @@ Work Log:
 Stage Summary:
 - Admin portal: /staff/login — admin@blockexchange.io / SuperAdmin#2026.
 - DB config now persistent via .env; repo ships .env.example for deployment setup.
+
+---
+Task ID: 3-loginfix
+Agent: Super Z (main agent)
+Task: "FIX THE LOGIN ITS NOT WORKING" — diagnose and fix user-reported login failure.
+
+Work Log:
+- Diagnosed via API + browser: both /api/auth/login (customer) and /api/staff/login (admin/staff/agent) work correctly; E2E browser logins succeed on localhost.
+- Reproduced the real UX bug: entering admin credentials on the customer portal returned 403 "Staff accounts must use the Staff Portal." but the user had no obvious path forward (error text only, small Staff link) → perceived as "login not working". Also confirmed server recycles between sessions can make preview briefly unreachable.
+- Fix in src/components/views/auth.tsx: cross-portal handoff. Staff creds at customer door -> auto-navigate to Staff Portal with email prefilled; customer creds at staff door -> auto-navigate to customer sign-in with email prefilled.
+- Browser E2E: admin@blockexchange.io at /login -> auto-landed /staff/login prefilled -> entered password -> /admin SUPER ADMIN CONSOLE. trader@demo.io at /staff/login -> auto-landed /login prefilled -> password -> /markets. Zero page errors, tsc clean.
+- Committed 384a418, pushed to new1.git (5f8ff61..384a418).
+
+Stage Summary:
+- Login works for all roles; wrong-portal attempts now self-heal with redirect + prefill instead of dead-ending.
+- If preview shows an error page, it is a recycled dev server — next message in session revives it; hard-refresh after.
