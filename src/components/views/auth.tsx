@@ -46,9 +46,14 @@ function AuthSplit({ children, title, sub }: { children: React.ReactNode; title:
   );
 }
 
+// Cross-portal handoff: when an account knocks on the wrong door, carry its
+// email over and land it on the correct portal automatically.
+let prefillStaffEmail = '';
+let prefillCustomerEmail = '';
+
 export function LoginView() {
   const { refresh } = useSession();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(prefillCustomerEmail);
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -61,7 +66,15 @@ export function LoginView() {
       await refresh();
       navigate('markets');
     } catch (err) {
-      setError((err as Error).message);
+      const msg = (err as Error).message || '';
+      if (msg.includes('Staff Portal')) {
+        // Admin/staff/sub-agent tried the customer door — take them to the right one.
+        prefillStaffEmail = email;
+        setError('');
+        navigate('staff-login');
+      } else {
+        setError(msg);
+      }
     } finally { setBusy(false); }
   };
 
@@ -177,7 +190,7 @@ export function SignupView() {
 
 export function StaffLoginView() {
   const { refresh } = useSession();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(prefillStaffEmail);
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -190,9 +203,18 @@ export function StaffLoginView() {
         method: 'POST', body: JSON.stringify({ email, password }),
       });
       await refresh();
+      prefillStaffEmail = '';
       navigate(d.user.role === 'SUB_AGENT' ? 'agent' : 'admin');
     } catch (err) {
-      setError((err as Error).message);
+      const msg = (err as Error).message || '';
+      if (msg.includes('staff only')) {
+        // Customer tried the staff door — send them to the customer sign-in.
+        prefillCustomerEmail = email;
+        setError('');
+        navigate('login');
+      } else {
+        setError(msg);
+      }
     } finally { setBusy(false); }
   };
 
