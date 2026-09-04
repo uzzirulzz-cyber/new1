@@ -1,128 +1,181 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Search, Star, Flame, TrendingUp, TrendingDown, Sparkles } from 'lucide-react';
-import { useExchange } from '@/lib/store';
-import { change24h, fmtPrice, fmtUsd, fmtPct } from '@/lib/market';
-import { cn } from '@/lib/utils';
+import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { GlassCard, PctBadge, LiveBadge, CoinIcon, Tag } from '@/components/shared';
+import { fmtPrice, fmtPct, useSession, api, timeAgo } from '@/lib/session';
+import { navigate } from '@/components/shell';
 import { Sparkline } from '@/components/charts';
+import { useMarkets } from '@/components/views/home';
+import { Search, Star, ArrowRight, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
 
-type Cat = 'all' | 'spot' | 'defi' | 'ai' | 'gaming' | 'new' | 'gainers' | 'losers';
+const CATEGORIES = ['All', 'Majors', 'Altcoin', 'DeFi', 'AI / Compute', 'Meme'];
+type SortKey = 'volume' | 'gainers' | 'losers' | 'name';
 
-export default function MarketsView() {
-  const { pairs, watchlist, toggleWatch, navigate, setSeedPair, stats } = useExchange();
-  const [cat, setCat] = useState<Cat>('all');
+export function MarketsView() {
+  const markets = useMarkets(3500);
+  const { user, refresh } = useSession();
   const [q, setQ] = useState('');
-  const [sortBy, setSortBy] = useState<'vol' | 'price' | 'chg'>('vol');
+  const [cat, setCat] = useState('All');
+  const [sort, setSort] = useState<SortKey>('volume');
+  const [watch, setWatch] = useState<Set<string>>(new Set());
+  const [watchLoaded, setWatchLoaded] = useState(false);
+  const [busy, setBusy] = useState('');
 
-  const change = (id: string) => { const p = pairs.find(x => x.id === id); return p ? change24h(p) : 0; };
+  React.useEffect(() => {
+    if (!user) { setWatch(new Set()); setWatchLoaded(true); return; }
+    api<{ watchlist: string[] }>('/api/watchlist').then(d => { setWatch(new Set(d.watchlist)); setWatchLoaded(true); }).catch(() => setWatchLoaded(true));
+  }, [user]);
 
-  const list = useMemo(() => {
-    let l = [...pairs];
-    if (cat === 'gainers') l.sort((a, b) => change24h(b) - change24h(a));
-    else if (cat === 'losers') l.sort((a, b) => change24h(a) - change24h(b));
-    else if (cat !== 'all') l = l.filter(p => p.cat.includes(cat as 'spot' | 'defi' | 'ai' | 'gaming' | 'new'));
+  const toggleWatch = async (symbol: string) => {
+    if (!user) { navigate('login'); return; }
+    setBusy(symbol);
+    try {
+      const d = await api<{ watching: boolean }>('/api/watchlist', { method: 'POST', body: JSON.stringify({ symbol }) });
+      setWatch(w => { const n = new Set(w); if (d.watching) n.add(symbol); else n.delete(symbol); return n; });
+      refresh();
+    } catch { /* noop */ } finally { setBusy(''); }
+  };
+
+  const rows = useMemo(() => {
+    let r = markets.filter(m => cat === 'All' || m.category === cat);
     if (q.trim()) {
-      const s = q.toLowerCase();
-      l = l.filter(p => p.symbol.toLowerCase().includes(s) || p.name.toLowerCase().includes(s));
+      const s = q.trim().toLowerCase();
+      r = r.filter(m => m.symbol.toLowerCase().includes(s) || m.name.toLowerCase().includes(s));
     }
-    if (cat !== 'gainers' && cat !== 'losers') {
-      if (sortBy === 'vol') l.sort((a, b) => b.volQuote - a.volQuote);
-      if (sortBy === 'chg') l.sort((a, b) => change24h(b) - change24h(a));
-    }
-    return l;
-  }, [pairs, cat, q, sortBy]);
-
-  const totalVol = pairs.reduce((s, p) => s + p.volQuote, 0);
-  const rising = pairs.filter(p => change24h(p) >= 0).length;
+    if (sort === 'gainers') r = [...r].sort((a, b) => b.change24h - a.change24h);
+    if (sort === 'losers') r = [...r].sort((a, b) => a.change24h - b.change24h);
+    if (sort === 'name') r = [...r].sort((a, b) => a.symbol.localeCompare(b.symbol));
+    return r;
+  }, [markets, q, cat, sort]);
 
   return (
-    <div className="p-3 md:p-5 space-y-4 max-w-[1500px] mx-auto">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="max-w-6xl mx-auto p-4 md:p-6 animate-in">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-[family-name:var(--font-display)] text-xl md:text-2xl font-bold">Markets</h1>
-          <p className="text-[12px] text-muted-foreground mt-0.5 flex items-center gap-2">
-            <LiveBadge /> {pairs.length} pairs · 24h volume {fmtUsd(totalVol)} · {rising} advancing / {pairs.length - rising} declining
-          </p>
+          <h1 className="font-display text-2xl font-bold text-white">Markets</h1>
+          <p className="text-[12.5px] text-slate-400 mt-0.5">Live prices · 24h change · sparklines · binary payouts</p>
         </div>
-        <div className="flex items-center gap-1.5 rounded-lg border hairline bg-[#081221]/80 px-3 h-9 w-full sm:w-72">
-          <Search size={14} className="text-muted-foreground" />
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search markets…" className="bg-transparent outline-none text-[12.5px] w-full" />
+        <div className="relative w-full sm:w-64">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <Input value={q} onChange={e => setQ(e.target.value)} placeholder="Search coin or symbol…" className="pl-9 bg-white/[0.04] border-white/10" />
         </div>
       </div>
 
-      {/* Category chips */}
-      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-        {([
-          ['all', 'All Markets', null], ['spot', 'Spot', null], ['gainers', 'Top Gainers', <TrendingUp size={12} key="g" />],
-          ['losers', 'Top Losers', <TrendingDown size={12} key="l" />], ['defi', 'DeFi', null], ['ai', 'AI & Data', <Sparkles size={12} key="a" />],
-          ['gaming', 'Gaming', null], ['new', 'New Listings', <Flame size={12} key="n" />],
-        ] as [Cat, string, React.ReactNode][]).map(([id, label, icon]) => (
-          <button key={id} onClick={() => setCat(id)}
-            className={cn('flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-2 text-[12px] font-medium border transition-all',
-              cat === id ? 'bg-[#00A3FF]/15 text-[#33B5FF] border-[#00A3FF]/40 shadow-[0_0_16px_rgba(0,163,255,0.12)]' : 'text-slate-400 hairline hover:text-white hover:border-[#00A3FF]/30')}>
-            {icon}{label}
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {CATEGORIES.map(c => (
+          <button key={c} onClick={() => setCat(c)} className={`px-3 py-1.5 rounded-lg text-[12px] transition-colors ${cat === c ? 'bg-[#00A3FF]/15 text-[#00A3FF] shadow-[inset_0_0_0_1px_rgba(0,163,255,0.3)]' : 'bg-white/[0.04] text-slate-400 hover:text-white'}`}>
+            {c}
           </button>
         ))}
+        <div className="flex-1" />
+        <select value={sort} onChange={e => setSort(e.target.value as SortKey)} className="h-8 rounded-lg bg-white/[0.04] border border-white/10 px-2 text-[12px] text-slate-300 outline-none">
+          <option value="volume" className="bg-[#081221]">Sort: Default</option>
+          <option value="gainers" className="bg-[#081221]">Top gainers</option>
+          <option value="losers" className="bg-[#081221]">Top losers</option>
+          <option value="name" className="bg-[#081221]">Name A–Z</option>
+        </select>
       </div>
 
-      <GlassCard className="p-0 overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-2.5 border-b hairline">
-          <div className="flex items-center gap-2"><LiveBadge /><p className="text-[12px] text-muted-foreground">Prices update in real time</p></div>
-          <div className="flex gap-1 text-[11px]">
-            {([['vol', 'Sort: Volume'], ['chg', 'Sort: Change']] as const).map(([v, label]) => (
-              <button key={v} onClick={() => setSortBy(v)}
-                className={cn('rounded-md px-2 py-1 border transition-colors', sortBy === v ? 'text-[#33B5FF] border-[#00A3FF]/40 bg-[#00A3FF]/10' : 'text-muted-foreground hairline')}>{label}</button>
-            ))}
-          </div>
+      <div className="mt-4 glass rounded-2xl overflow-hidden">
+        <div className="grid grid-cols-[28px_1.5fr_1fr_0.9fr_88px_92px] md:grid-cols-[36px_1.6fr_1.1fr_1fr_1fr_96px] gap-2 px-4 py-2.5 hairline-b text-[10.5px] uppercase tracking-wider text-slate-500">
+          <span /><span>Coin</span><span className="text-right">Price</span><span className="text-right">24h</span><span className="text-right hidden md:block">Spark · 60m</span><span className="text-right">Trade</span>
         </div>
-        <div className="overflow-x-auto">
-          <table className="bx-table">
-            <thead>
-              <tr><th>Market</th><th>Last Price</th><th>24h Change</th><th>24h High / Low</th><th>24h Volume</th><th>Market Cap</th><th>Max Lev</th><th>7d Trend</th><th>Actions</th></tr>
-            </thead>
-            <tbody>
-              {list.map(p => {
-                const ch = change(p.id);
-                const dir = change24h(p) >= 0 ? 1 : -1;
-                return (
-                  <tr key={p.id} className="cursor-pointer" onClick={() => { setSeedPair(p.id); navigate('trade-spot'); }}>
-                    <td>
-                      <div className="flex items-center gap-2.5">
-                        <Star size={13} onClick={e => { e.stopPropagation(); toggleWatch(p.id); }}
-                          className={cn('shrink-0 transition-colors', watchlist.has(p.id) ? 'text-[#FFB800] fill-[#FFB800]' : 'text-slate-600 hover:text-[#FFB800]')} />
-                        <CoinIcon symbol={p.base} color={p.color} size={28} />
-                        <div>
-                          <p className="font-semibold text-[12.5px]">{p.symbol}{cat === 'new' && <Tag color="gold" className="ml-1.5">NEW</Tag>}</p>
-                          <p className="text-[10.5px] text-muted-foreground">{p.name}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className={cn('tabular font-semibold', dir >= 0 ? 'text-[#00FF88]' : 'text-[#FF4D4D]')}>${fmtPrice(p.price)}</td>
-                    <td><PctBadge value={ch} /></td>
-                    <td className="tabular text-[11.5px] text-slate-400">{fmtPrice(p.high24h)} / {fmtPrice(p.low24h)}</td>
-                    <td className="tabular text-slate-300">{fmtUsd(p.volQuote)}</td>
-                    <td className="tabular text-slate-300">{fmtUsd(p.mcap)}</td>
-                    <td><Tag color="gold">{p.leverageMax}×</Tag></td>
-                    <td><Sparkline data={Array.from({ length: 20 }, (_, i) => p.price * (1 + Math.sin(i * 0.8 + p.base.length * 2) * (ch >= 0 ? 0.008 : -0.008)))} w={96} h={26} /></td>
-                    <td>
-                      <div className="flex gap-1.5">
-                        <Button size="sm" className="h-7 text-[10.5px] px-2.5 bg-[#00A3FF]/15 text-[#33B5FF] border border-[#00A3FF]/35 hover:bg-[#00A3FF]/25"
-                          onClick={e => { e.stopPropagation(); setSeedPair(p.id); navigate('trade-spot'); }}>Spot</Button>
-                        <Button size="sm" className="h-7 text-[10.5px] px-2.5 bg-[#FFB800]/10 text-[#FFD35C] border border-[#FFB800]/30 hover:bg-[#FFB800]/20"
-                          onClick={e => { e.stopPropagation(); setSeedPair(p.id); navigate('trade-futures'); }}>{Math.min(50, p.leverageMax)}x</Button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        {rows.length === 0 && (
+          <div className="px-4 py-10 text-center text-slate-500 text-[13px]">{markets.length === 0 ? 'Loading markets…' : 'No markets match your search.'}</div>
+        )}
+        {rows.map(m => {
+          const up = m.change24h >= 0;
+          const watching = watch.has(m.symbol);
+          return (
+            <div key={m.symbol} className="grid grid-cols-[28px_1.5fr_1fr_0.9fr_88px_92px] md:grid-cols-[36px_1.6fr_1.1fr_1fr_1fr_96px] gap-2 items-center px-4 py-3 hairline-b last:border-0 hover:bg-white/[0.025] transition-colors">
+              <button onClick={() => toggleWatch(m.symbol)} className="justify-self-center" title={user ? 'Watchlist' : 'Sign in to use watchlist'}>
+                {busy === m.symbol ? <Loader2 size={14} className="animate-spin text-slate-500" /> :
+                  <Star size={15} className={watching ? 'text-[#FFB800] fill-[#FFB800]' : 'text-slate-600 hover:text-slate-400'} />}
+              </button>
+              <button className="flex items-center gap-2.5 text-left" onClick={() => navigate('trade')}>
+                <div className="w-8 h-8 rounded-lg bg-white/[0.05] grid place-items-center text-[10px] font-bold text-[#00A3FF]">{m.symbol.slice(0, 2)}</div>
+                <div className="min-w-0">
+                  <div className="text-[13.5px] font-semibold text-white truncate">{m.symbol}</div>
+                  <div className="text-[10.5px] text-slate-500 truncate">{m.name} · {m.category}</div>
+                </div>
+              </button>
+              <div className="text-right font-display text-[13.5px] font-semibold text-white tabular-nums">${fmtPrice(m.price)}</div>
+              <div className={`text-right text-[12.5px] font-semibold ${up ? 'text-[#00FF88]' : 'text-[#FF4D4D]'}`}>{fmtPct(m.change24h)}</div>
+              <div className="hidden md:block justify-self-end"><Sparkline data={m.spark} up={up} /></div>
+              <Button size="sm" onClick={() => navigate('trade')} className="justify-self-end h-8 px-3 bg-[#00A3FF]/15 text-[#00A3FF] hover:bg-[#00A3FF]/25 shadow-none">
+                Trade <ArrowRight size={12} className="ml-1" />
+              </Button>
+            </div>
+          );
+        })}
+      </div>
+      {!user && (
+        <div className="mt-4 glass rounded-2xl p-4 flex items-center gap-3">
+          <TrendingUp size={17} className="text-[#FFB800]" />
+          <p className="text-[12.5px] text-slate-400 flex-1">Sign in to access trading charts, indicators and the watchlist — chart data is members-only.</p>
+          <Button size="sm" onClick={() => navigate('signup')} className="bg-[#00A3FF] text-[#04101F] font-semibold">Open Account</Button>
         </div>
-      </GlassCard>
-      <p className="text-[10.5px] text-muted-foreground">Demo environment — market data is simulated for illustration. {fmtPct(rising / pairs.length * 100 - 100, 0)} market breadth.</p>
+      )}
+    </div>
+  );
+}
+
+export function WatchlistView() {
+  const { user, loading } = useSession();
+  const markets = useMarkets(3500);
+  const [watch, setWatch] = useState<Set<string>>(new Set());
+
+  React.useEffect(() => {
+    if (!user) return;
+    api<{ watchlist: string[] }>('/api/watchlist').then(d => setWatch(new Set(d.watchlist))).catch(() => {});
+  }, [user]);
+
+  const toggle = async (symbol: string) => {
+    const d = await api<{ watching: boolean }>('/api/watchlist', { method: 'POST', body: JSON.stringify({ symbol }) });
+    setWatch(w => { const n = new Set(w); if (d.watching) n.add(symbol); else n.delete(symbol); return n; });
+  };
+
+  if (!loading && !user) {
+    return (
+      <div className="max-w-md mx-auto p-10 text-center animate-in">
+        <Star size={30} className="mx-auto text-slate-600" />
+        <h1 className="mt-3 font-display text-xl font-bold text-white">Watchlist is members-only</h1>
+        <p className="mt-2 text-[13px] text-slate-400">Sign in to track your favorite markets, or open an account with an invitation code.</p>
+        <div className="mt-5 flex justify-center gap-2">
+          <Button onClick={() => navigate('login')} className="bg-[#00A3FF] text-[#04101F] font-semibold">Sign in</Button>
+          <Button variant="outline" onClick={() => navigate('signup')} className="border-white/15 text-white">Open Account</Button>
+        </div>
+      </div>
+    );
+  }
+
+  const rows = markets.filter(m => watch.has(m.symbol));
+
+  return (
+    <div className="max-w-6xl mx-auto p-4 md:p-6 animate-in">
+      <h1 className="font-display text-2xl font-bold text-white">Watchlist</h1>
+      <p className="text-[12.5px] text-slate-400 mt-0.5">Your starred markets with live pricing.</p>
+      <div className="mt-4 glass rounded-2xl overflow-hidden">
+        {rows.length === 0 && <div className="px-4 py-12 text-center text-slate-500 text-[13px]">Nothing starred yet — tap the star on any market in <button onClick={() => navigate('markets')} className="text-[#00A3FF] hover:underline">Markets</button>.</div>}
+        {rows.map(m => {
+          const up = m.change24h >= 0;
+          return (
+            <div key={m.symbol} className="flex items-center gap-3 px-4 py-3 hairline-b last:border-0">
+              <button onClick={() => toggle(m.symbol)}><Star size={15} className="text-[#FFB800] fill-[#FFB800]" /></button>
+              <div className="w-9 h-9 rounded-lg bg-white/[0.05] grid place-items-center text-[10px] font-bold text-[#00A3FF]">{m.symbol.slice(0, 2)}</div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[13.5px] font-semibold text-white">{m.symbol}</div>
+                <div className="text-[10.5px] text-slate-500">{m.name}</div>
+              </div>
+              <Sparkline data={m.spark} up={up} />
+              <div className="w-28 text-right font-display text-[13.5px] font-semibold text-white tabular-nums">${fmtPrice(m.price)}</div>
+              <div className={`w-16 text-right text-[12.5px] font-semibold ${up ? 'text-[#00FF88]' : 'text-[#FF4D4D]'}`}>{fmtPct(m.change24h)}</div>
+              <Button size="sm" onClick={() => navigate('trade')} className="h-8 px-3 bg-[#00A3FF]/15 text-[#00A3FF] hover:bg-[#00A3FF]/25 shadow-none">Trade</Button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

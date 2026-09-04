@@ -1,369 +1,253 @@
 'use client';
 
-import React, { useState } from 'react';
-import {
-  ShieldCheck, IdCard, Upload, CheckCircle2, Clock3, XCircle, Users, Gift, Copy,
-  LifeBuoy, MessageSquare, Send, Settings2, KeyRound, Smartphone, Monitor, Globe,
-  Bell, Palette, ChevronRight, Lock, Award, Mail,
-} from 'lucide-react';
-import { useExchange } from '@/lib/store';
-import { cn } from '@/lib/utils';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { api, fmtUsd, useSession, timeAgo } from '@/lib/session';
+import { navigate } from '@/components/shell';
+import { Loader2, Bell, CheckCheck, Info, CheckCircle2, AlertTriangle, XCircle, Send, LifeBuoy, ShieldCheck, KeyRound, LogOut, BadgeCheck } from 'lucide-react';
 import { toast } from 'sonner';
-import { GlassCard, StatCard, Tag, SectionTitle } from '@/components/shared';
 
-/* ---------------------------------- KYC ---------------------------------- */
-export function KycView() {
-  const { user } = useExchange();
-  const [tier, setTier] = useState<'unverified' | 'pending' | 'verified' | 'institutional'>('pending');
-  const [step, setStep] = useState(0);
+/* ------------------------------ Profile ------------------------------ */
 
-  const TIERS = [
-    { id: 'basic', name: 'Tier 1 — Basic', limit: '2,000 USDT daily · spot only', reqs: ['Email + phone verified', 'Country of residence'], time: 'Instant', color: '#00FF88' },
-    { id: 'advanced', name: 'Tier 2 — Advanced', limit: '500,000 USDT daily · spot + futures', reqs: ['Government ID document', 'Facial liveness check', 'Proof of address'], time: '~15 min', color: '#00A3FF' },
-    { id: 'institutional', name: 'Tier 3 — Institutional', limit: 'Unlimited · OTC desk access', reqs: ['Business registration docs', 'Source of funds declaration', 'Compliance interview'], time: '1–3 days', color: '#FFB800' },
-  ];
+export function ProfileView() {
+  const { user, loading } = useSession();
 
-  const upload = (label: string) => toast.success('Document uploaded', `${label} queued for review (demo)`);
+  if (!loading && !user) return <Gate note="Your UID, VIP level, KYC status and contact details." />;
+
+  const kycColor = user?.kycStatus === 'VERIFIED' ? 'text-[#00FF88]' : user?.kycStatus === 'PENDING' ? 'text-[#FFB800]' : 'text-slate-400';
 
   return (
-    <div className="p-3 md:p-5 space-y-4 max-w-[1200px] mx-auto">
-      <div>
-        <h1 className="font-[family-name:var(--font-display)] text-xl md:text-2xl font-bold">KYC Verification</h1>
-        <p className="text-[12px] text-muted-foreground mt-0.5">Unlock higher limits and full platform access · KYC is mandatory for withdrawals</p>
+    <div className="max-w-3xl mx-auto p-4 md:p-6 animate-in">
+      <h1 className="font-display text-2xl font-bold text-white">Profile</h1>
+      <div className="mt-5 glass rounded-2xl p-6">
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#00A3FF] to-[#005f9e] grid place-items-center text-2xl font-bold text-[#04101F]">{user?.name.slice(0, 1)}</div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-display text-xl font-bold text-white">{user?.name}</span>
+              {user?.kycStatus === 'VERIFIED' && <BadgeCheck size={17} className="text-[#00FF88]" />}
+            </div>
+            <div className="text-[12.5px] text-slate-400">{user?.email}</div>
+          </div>
+          <div className="flex-1" />
+          <div className="text-right">
+            <div className="text-[10.5px] text-slate-500">VIP level</div>
+            <div className="font-display text-lg font-bold text-[#FFB800]">VIP {user?.vipLevel}</div>
+          </div>
+        </div>
+        <div className="mt-6 grid sm:grid-cols-2 gap-3">
+          {[
+            ['UID', user?.uid ?? '—'],
+            ['Email', user?.email ?? '—'],
+            ['Phone', user?.phone || 'Not set'],
+            ['Country', user?.country || 'Not set'],
+            ['KYC status', <span key="k" className={`capitalize font-semibold ${kycColor}`}>{user?.kycStatus.toLowerCase()}</span>],
+            ['Account status', <span key="s" className={user?.status === 'ACTIVE' ? 'text-[#00FF88] font-semibold' : 'text-[#FF4D4D] font-semibold'}>{user?.status.toLowerCase()}</span>],
+            ['Member since', user ? new Date(user.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '—'],
+            ['Invited by', user?.invitedById ? 'Sub-agent partner' : 'Direct'],
+          ].map(([k, v]) => (
+            <div key={k as string} className="rounded-xl bg-white/[0.03] px-4 py-3">
+              <div className="text-[10.5px] uppercase tracking-wider text-slate-500">{k}</div>
+              <div className="mt-0.5 text-[13.5px] text-white">{v}</div>
+            </div>
+          ))}
+        </div>
       </div>
+      <p className="mt-3 text-[11.5px] text-slate-500">To change your name, phone or country, contact BlockExchange Support from the Support page.</p>
+    </div>
+  );
+}
 
-      <div className="grid sm:grid-cols-3 gap-2.5">
-        <StatCard label="Current Tier" value={user.kyc === 'verified' ? 'Tier 2' : 'Pending'} icon={<ShieldCheck size={15} />} accent="blue" sub="Advanced verified" />
-        <StatCard label="Daily Limit" value="500K USDT" icon={<IdCard size={15} />} accent="gold" sub="withdraw + transfer" />
-        <StatCard label="Review Status" value={tier === 'pending' ? 'In Review' : 'Verified'} icon={<Clock3 size={15} />} accent={tier === 'pending' ? 'gold' : 'green'} sub="est. 15 min remaining" />
+function Gate({ note }: { note: string }) {
+  return (
+    <div className="max-w-md mx-auto p-10 text-center animate-in">
+      <ShieldCheck size={30} className="mx-auto text-slate-600" />
+      <h1 className="mt-3 font-display text-xl font-bold text-white">Members only</h1>
+      <p className="mt-2 text-[13px] text-slate-400">{note}</p>
+      <div className="mt-5 flex justify-center gap-2">
+        <Button onClick={() => navigate('login')} className="bg-[#00A3FF] text-[#04101F] font-semibold">Sign in</Button>
+        <Button variant="outline" onClick={() => navigate('signup')} className="border-white/15 text-white">Open Account</Button>
       </div>
+    </div>
+  );
+}
 
-      {/* Progress steps */}
-      <GlassCard>
-        <SectionTitle title="Verification Flow" sub="Tier 2 — Advanced" icon={<ShieldCheck size={15} />} right={<Tag color="gold">2 of 3 steps</Tag>} />
-        <div className="flex items-center gap-1.5">
-          {['Identity document', 'Facial liveness', 'Proof of address'].map((s, i) => (
-            <React.Fragment key={s}>
-              <div className={cn('flex items-center gap-2 rounded-lg border px-3 py-2 flex-1 min-w-0',
-                i <= step ? 'border-[#00A3FF]/45 bg-[#00A3FF]/8' : 'hairline')}>
-                <span className={cn('w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0',
-                  i < step ? 'bg-[#00FF88] text-[#03150b]' : i === step ? 'bg-[#00A3FF] text-white' : 'bg-[#0B1A30] text-muted-foreground')}>
-                  {i < step ? '✓' : i + 1}
-                </span>
-                <span className={cn('text-[11.5px] truncate', i === step ? 'text-white font-medium' : 'text-muted-foreground')}>{s}</span>
+/* ------------------------------ Notifications ------------------------------ */
+
+interface Notif { id: string; title: string; body: string; type: string; read: boolean; createdAt: string }
+
+const TYPE_ICON: Record<string, React.ReactNode> = {
+  INFO: <Info size={15} className="text-[#00A3FF]" />,
+  SUCCESS: <CheckCircle2 size={15} className="text-[#00FF88]" />,
+  WARNING: <AlertTriangle size={15} className="text-[#FFB800]" />,
+  ERROR: <XCircle size={15} className="text-[#FF4D4D]" />,
+};
+
+export function NotificationsView() {
+  const { user, refresh } = useSession();
+  const [items, setItems] = useState<Notif[]>([]);
+  const [unread, setUnread] = useState(0);
+
+  const load = useCallback(() => {
+    if (!user) return;
+    api<{ notifications: Notif[]; unreadCount: number }>('/api/notifications').then(d => { setItems(d.notifications); setUnread(d.unreadCount); }).catch(() => {});
+  }, [user]);
+  useEffect(() => { load(); const iv = setInterval(load, 6000); return () => clearInterval(iv); }, [load]);
+
+  if (!user) return <Gate note="Trade settlements, payments and security alerts appear here." />;
+
+  const markAll = async () => {
+    await api('/api/notifications', { method: 'POST', body: JSON.stringify({}) });
+    load(); refresh();
+    toast.success('All notifications marked as read');
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto p-4 md:p-6 animate-in">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-display text-2xl font-bold text-white flex items-center gap-2"><Bell size={20} className="text-[#00A3FF]" /> Notifications</h1>
+          <p className="text-[12.5px] text-slate-400 mt-0.5">{unread > 0 ? `${unread} unread` : 'All caught up'}</p>
+        </div>
+        <Button size="sm" variant="outline" onClick={markAll} disabled={unread === 0} className="border-white/15 text-white"><CheckCheck size={14} className="mr-1.5" /> Mark all read</Button>
+      </div>
+      <div className="mt-4 space-y-2">
+        {items.length === 0 && <div className="glass rounded-2xl p-10 text-center text-slate-500 text-[13px]">No notifications yet.</div>}
+        {items.map(n => (
+          <div key={n.id} className={`glass rounded-2xl p-4 flex gap-3 ${!n.read ? 'shadow-[inset_0_0_0_1px_rgba(0,163,255,0.28)]' : 'opacity-75'}`}>
+            <div className="mt-0.5">{TYPE_ICON[n.type] ?? TYPE_ICON.INFO}</div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[13.5px] font-semibold text-white">{n.title}</span>
+                <span className="text-[10.5px] text-slate-500 shrink-0">{timeAgo(n.createdAt)}</span>
               </div>
-              {i < 2 && <div className={cn('h-[2px] w-4 shrink-0 rounded', i < step ? 'bg-[#00A3FF]' : 'bg-[#0B1A30]')} />}
-            </React.Fragment>
-          ))}
-        </div>
-        <div className="mt-4 grid sm:grid-cols-3 gap-2.5">
-          {['Passport / ID card', 'Selfie with code', 'Utility bill < 3 months'].map((label, i) => (
-            <button key={label} onClick={() => { upload(label); if (i === step && step < 2) setStep(step + 1); }}
-              className={cn('rounded-xl border border-dashed px-4 py-6 flex flex-col items-center gap-2 transition-colors',
-                i === step ? 'border-[#00A3FF]/50 bg-[#00A3FF]/5 hover:bg-[#00A3FF]/10' : 'hairline hover:border-[#00A3FF]/30')}>
-              <Upload size={18} className={i <= step ? 'text-[#33B5FF]' : 'text-muted-foreground'} />
-              <p className="text-[11.5px] font-medium">{label}</p>
-              <p className="text-[9.5px] text-muted-foreground">JPG, PNG or PDF · max 8MB</p>
-              {i < step && <Tag color="green"><CheckCircle2 size={9} /> Uploaded</Tag>}
-            </button>
-          ))}
-        </div>
-      </GlassCard>
-
-      {/* Tier cards */}
-      <div className="grid md:grid-cols-3 gap-3">
-        {TIERS.map((t, i) => (
-          <GlassCard key={t.id} gold={i === 2} hover className="relative overflow-hidden">
-            <div className="absolute -top-8 -right-8 w-24 h-24 blur-3xl rounded-full opacity-25" style={{ background: t.color }} />
-            <div className="flex items-center justify-between">
-              <p className="text-[13.5px] font-semibold font-[family-name:var(--font-display)]">{t.name}</p>
-              {i === 1 && <Tag color="green">Your tier</Tag>}
+              <p className="mt-1 text-[12.5px] text-slate-400 leading-relaxed">{n.body}</p>
             </div>
-            <p className="text-[11.5px] text-[#FFD35C] mt-1 tabular">{t.limit}</p>
-            <ul className="mt-3 space-y-1.5">
-              {t.reqs.map(r => (
-                <li key={r} className="flex items-start gap-2 text-[11.5px] text-slate-300"><CheckCircle2 size={12} className="text-[#00FF88] shrink-0 mt-0.5" />{r}</li>
-              ))}
-            </ul>
-            <div className="mt-3.5 flex items-center justify-between">
-              <span className="text-[10.5px] text-muted-foreground">Review time: <span className="text-white">{t.time}</span></span>
-              <Button size="sm" variant={i === 2 ? 'default' : 'outline'} className={cn('h-7.5 h-8 text-[11px]', i === 2 ? 'bg-gradient-to-r from-[#FFD35C] to-[#FFB800] text-[#181200] border-0 font-bold' : 'border-[#00A3FF]/40 text-[#33B5FF]')}>
-                {i < 2 ? 'Verified' : 'Apply'}
-              </Button>
-            </div>
-          </GlassCard>
+            {!n.read && <div className="w-2 h-2 rounded-full bg-[#00A3FF] mt-1.5 shrink-0" />}
+          </div>
         ))}
       </div>
     </div>
   );
 }
 
-/* -------------------------------- Affiliate ------------------------------- */
-export function AffiliateView() {
-  const [copied, setCopied] = useState(false);
-  const link = 'https://blockexchange.io/r/uzair-vip3';
-  const code = 'UZAIR-VIP3';
-  const referrals = [
-    { name: 'cryptoNinja_88', joined: '12 Aug 2026', volume: 482300, commission: 1204.42, status: 'active' },
-    { name: 'sats4life', joined: '02 Aug 2026', volume: 201450, commission: 503.10, status: 'active' },
-    { name: 'defi_wanderer', joined: '28 Jul 2026', volume: 96400, commission: 241.20, status: 'active' },
-    { name: 'moonwhale', joined: '19 Jul 2026', volume: 8920, commission: 22.30, status: 'inactive' },
-    { name: 'algo_queen', joined: '11 Jul 2026', volume: 154800, commission: 387.00, status: 'active' },
-  ];
-  return (
-    <div className="p-3 md:p-5 space-y-4 max-w-[1300px] mx-auto">
-      <div>
-        <h1 className="font-[family-name:var(--font-display)] text-xl md:text-2xl font-bold">Affiliate Program</h1>
-        <p className="text-[12px] text-muted-foreground mt-0.5">Earn up to 45% commission from your referrals' trading fees — for life</p>
-      </div>
+/* ------------------------------ Settings ------------------------------ */
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-        <StatCard label="Total Commission" value="$2,358.02" icon={<Gift size={15} />} accent="gold" delta={18.2} sub="paid in USDT" />
-        <StatCard label="Referrals" value={referrals.length} icon={<Users size={15} />} accent="blue" sub="4 active traders" />
-        <StatCard label="Commission Rate" value="38%" icon={<Award size={15} />} accent="green" sub="VIP3 boosted rate" />
-        <StatCard label="Pending Payout" value="$142.20" icon={<Clock3 size={15} />} accent="violet" sub="settles daily 00:00 UTC" />
-      </div>
+export function SettingsView() {
+  const { user, logout, refresh } = useSession();
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
 
-      <div className="grid lg:grid-cols-[1fr_320px] gap-3">
-        <GlassCard className="p-0 overflow-hidden">
-          <div className="px-4 py-3 border-b hairline"><p className="text-[13.5px] font-semibold font-[family-name:var(--font-display)]">Your Referrals</p></div>
-          <div className="overflow-x-auto">
-            <table className="bx-table">
-              <thead><tr><th>User</th><th>Joined</th><th>Trading Volume</th><th>Your Commission</th><th>Status</th></tr></thead>
-              <tbody>
-                {referrals.map(r => (
-                  <tr key={r.name}>
-                    <td className="font-medium text-[12px]">{r.name}</td>
-                    <td className="text-slate-400 text-[11.5px]">{r.joined}</td>
-                    <td className="tabular">${r.volume.toLocaleString()}</td>
-                    <td className="tabular text-[#00FF88] font-medium">+${r.commission.toFixed(2)}</td>
-                    <td><Tag color={r.status === 'active' ? 'green' : 'gray'}>{r.status}</Tag></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </GlassCard>
-        <div className="space-y-3">
-          <GlassCard className="space-y-3">
-            <p className="text-[12.5px] font-semibold flex items-center gap-1.5"><Copy size={13} className="text-[#33B5FF]" /> Share & earn</p>
-            <div className="rounded-lg bg-[#0B1A30] border hairline px-3 py-2.5">
-              <p className="text-[9.5px] uppercase tracking-wider text-muted-foreground mb-1">Referral link</p>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 text-[10.5px] break-all text-slate-300">{link}</code>
-                <Button size="icon" variant="outline" className="h-7 w-7 border-[#00A3FF]/35 text-[#33B5FF]"
-                  onClick={() => { navigator.clipboard?.writeText(link).catch(() => {}); setCopied(true); toast.success('Link copied'); setTimeout(() => setCopied(false), 1500); }}>
-                  {copied ? <CheckCircle2 size={12} /> : <Copy size={12} />}
-                </Button>
-              </div>
-            </div>
-            <div className="rounded-lg bg-[#0B1A30] border hairline px-3 py-2.5">
-              <p className="text-[9.5px] uppercase tracking-wider text-muted-foreground mb-1">Referral code</p>
-              <p className="text-[14px] font-bold tracking-[0.15em] text-[#FFD35C]">{code}</p>
-            </div>
-            <div className="rounded-lg border hairline bg-[#0B1A30]/60 p-3 text-[11px] space-y-1.5">
-              <div className="flex justify-between"><span className="text-muted-foreground">Tier 1 (direct)</span><span className="text-[#00FF88] font-semibold">38% of fees</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Tier 2 (indirect)</span><span className="tabular">7% of fees</span></div>
-            </div>
-          </GlassCard>
-        </div>
-      </div>
-    </div>
-  );
-}
+  if (!user) return <Gate note="Security settings and password management." />;
 
-/* --------------------------------- Support -------------------------------- */
-export function SupportView() {
-  const [tickets, setTickets] = useState([
-    { id: '#TK-8812', subject: 'Withdrawal stuck in review', status: 'In Progress', updated: '12 min ago', priority: 'High' },
-    { id: '#TK-8754', subject: 'Enable withdrawal whitelist', status: 'Resolved', updated: '2 days ago', priority: 'Medium' },
-  ]);
-  const [subject, setSubject] = useState('');
-  const [msg, setMsg] = useState('');
-  const [category, setCategory] = useState('Trading');
-
-  const submit = () => {
-    if (!subject.trim() || !msg.trim()) { toast.error('Missing fields', 'Subject and message are required.'); return; }
-    setTickets(t => [{ id: `#TK-${8813 + t.length}`, subject, status: 'Open', updated: 'just now', priority: 'Medium' }, ...t]);
-    toast.success('Ticket submitted', 'Our desk responds within 2 hours (24/7).');
-    setSubject(''); setMsg('');
+  const changePw = async () => {
+    if (next !== confirm) { toast.error('New passwords do not match'); return; }
+    setBusy(true);
+    try {
+      await api('/api/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword: current, newPassword: next }) });
+      toast.success('Password updated', { description: 'All other sessions were signed out.' });
+      setCurrent(''); setNext(''); setConfirm(''); refresh();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally { setBusy(false); }
   };
 
-  const FAQS = [
-    { q: 'What are the trading fees?', a: 'Spot maker/taker fees start at 0.10%/0.10% and scale down with 30-day volume. VIP tiers enjoy maker rebates down to 0.00%. Futures fees start at 0.02%/0.05%.' },
-    { q: 'How fast are withdrawals processed?', a: 'Automated risk checks complete in under 10 minutes for whitelisted addresses. Large withdrawals above 50K USDT route to manual compliance review (1–3 hours).' },
-    { q: 'Is my custody insured?', a: 'Yes — custodial assets are covered by a $750M insurance fund with monthly proof-of-reserves published on-chain.' },
-    { q: 'Do you support institutional OTC?', a: 'Tier 3 verified clients get dedicated OTC desk access with block liquidity above 250K USDT and zero slippage quotes.' },
-  ];
-  const [openFaq, setOpenFaq] = useState<number | null>(0);
-
   return (
-    <div className="p-3 md:p-5 space-y-4 max-w-[1300px] mx-auto">
-      <div>
-        <h1 className="font-[family-name:var(--font-display)] text-xl md:text-2xl font-bold">Support Center</h1>
-        <p className="text-[12px] text-muted-foreground mt-0.5">24/7 human support · average first response under 2 hours</p>
-      </div>
-
-      <div className="grid lg:grid-cols-[380px_1fr] gap-3">
-        {/* New ticket */}
-        <GlassCard className="space-y-3 h-fit">
-          <p className="text-[13.5px] font-semibold font-[family-name:var(--font-display)] flex items-center gap-2"><MessageSquare size={14} className="text-[#33B5FF]" /> Open a ticket</p>
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Category</p>
-            <select value={category} onChange={e => setCategory(e.target.value)} className="w-full rounded-lg bg-[#0B1A30] border hairline px-3 py-2.5 text-[12.5px] outline-none">
-              {['Trading', 'Deposits & Withdrawals', 'Account Security', 'KYC & Compliance', 'Bug Report', 'General'].map(c => <option key={c}>{c}</option>)}
-            </select>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Subject</p>
-            <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Brief summary"
-              className="w-full rounded-lg bg-[#0B1A30] border hairline px-3 py-2.5 text-[12.5px] outline-none focus:border-[#00A3FF]/50" />
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Message</p>
-            <textarea value={msg} onChange={e => setMsg(e.target.value)} rows={5} placeholder="Describe your issue in detail…"
-              className="w-full rounded-lg bg-[#0B1A30] border hairline px-3 py-2.5 text-[12.5px] outline-none resize-none focus:border-[#00A3FF]/50" />
-          </div>
-          <Button onClick={submit} className="w-full h-10 text-[12.5px] font-bold bg-gradient-to-r from-[#00A3FF] to-[#0077d4] text-[#04101F] border-0">
-            <Send size={13} /> Submit Ticket
-          </Button>
-          <div className="rounded-lg border hairline bg-[#0B1A30]/60 p-3 space-y-2">
-            {[['Live chat', 'Avg wait 40s'], ['Priority line (VIP)', 'Instant'], ['compliance@blockexchange.io', 'Replies < 24h']].map(([k, v]) => (
-              <div key={k} className="flex items-center justify-between text-[11px]">
-                <span className="flex items-center gap-1.5"><LifeBuoy size={11} className="text-[#00FF88]" />{k}</span>
-                <span className="text-muted-foreground">{v}</span>
-              </div>
-            ))}
-          </div>
-        </GlassCard>
-
-        <div className="space-y-3">
-          <GlassCard className="p-0 overflow-hidden">
-            <div className="px-4 py-3 border-b hairline"><p className="text-[13.5px] font-semibold font-[family-name:var(--font-display)]">My Tickets</p></div>
-            <div className="divide-y hairline/60">
-              {tickets.map(t => (
-                <div key={t.id} className="px-4 py-3 flex items-center gap-3 hover:bg-[#00A3FF]/4 transition-colors">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[12.5px] font-medium truncate">{t.subject}</p>
-                    <p className="text-[10.5px] text-muted-foreground">{t.id} · updated {t.updated}</p>
-                  </div>
-                  <Tag color={t.priority === 'High' ? 'red' : 'gold'}>{t.priority}</Tag>
-                  <Tag color={t.status === 'Resolved' ? 'green' : t.status === 'Open' ? 'blue' : 'gold'}>{t.status}</Tag>
-                  <ChevronRight size={14} className="text-muted-foreground shrink-0" />
-                </div>
-              ))}
-            </div>
-          </GlassCard>
-
-          <GlassCard className="p-0 overflow-hidden">
-            <div className="px-4 py-3 border-b hairline"><p className="text-[13.5px] font-semibold font-[family-name:var(--font-display)]">Frequently Asked</p></div>
-            <div className="divide-y hairline/60">
-              {FAQS.map((f, i) => (
-                <div key={i}>
-                  <button onClick={() => setOpenFaq(openFaq === i ? null : i)} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-[#00A3FF]/4">
-                    <span className="text-[12.5px] font-medium">{f.q}</span>
-                    <ChevronRight size={14} className={cn('text-muted-foreground transition-transform shrink-0', openFaq === i && 'rotate-90')} />
-                  </button>
-                  {openFaq === i && <p className="px-4 pb-3.5 text-[12px] text-muted-foreground leading-relaxed -mt-1">{f.a}</p>}
-                </div>
-              ))}
-            </div>
-          </GlassCard>
+    <div className="max-w-3xl mx-auto p-4 md:p-6 animate-in">
+      <h1 className="font-display text-2xl font-bold text-white">Settings</h1>
+      <div className="mt-5 glass rounded-2xl p-5">
+        <div className="flex items-center gap-2 text-[14px] font-semibold text-white"><KeyRound size={15} className="text-[#00A3FF]" /> Change password</div>
+        <div className="mt-4 grid gap-3 max-w-md">
+          <div><Label className="text-[11.5px] text-slate-400">Current password</Label><Input type="password" value={current} onChange={e => setCurrent(e.target.value)} className="mt-1 h-10 bg-white/[0.04] border-white/10" /></div>
+          <div><Label className="text-[11.5px] text-slate-400">New password</Label><Input type="password" value={next} onChange={e => setNext(e.target.value)} className="mt-1 h-10 bg-white/[0.04] border-white/10" placeholder="Minimum 8 characters" /></div>
+          <div><Label className="text-[11.5px] text-slate-400">Confirm new password</Label><Input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} className="mt-1 h-10 bg-white/[0.04] border-white/10" /></div>
+          <Button onClick={changePw} disabled={busy || next.length < 8} className="h-10 bg-gradient-to-r from-[#00A3FF] to-[#0077d4] text-[#04101F] font-semibold">{busy ? <Loader2 size={14} className="animate-spin" /> : 'Update password'}</Button>
         </div>
+      </div>
+      <div className="mt-3 glass rounded-2xl p-5">
+        <div className="text-[14px] font-semibold text-white">Preferences</div>
+        <div className="mt-3 space-y-2.5 text-[13px]">
+          {[['Trade confirmations', true], ['Settlement notifications', true], ['Marketing emails', false]].map(([label, on]) => (
+            <div key={label as string} className="flex items-center justify-between rounded-xl bg-white/[0.03] px-4 py-3">
+              <span className="text-slate-200">{label}</span>
+              <span className={`w-10 h-5.5 rounded-full relative ${on ? 'bg-[#00A3FF]/40' : 'bg-white/10'}`}><span className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-white transition-all ${on ? 'right-0.5' : 'left-0.5'}`} style={{ width: 18, height: 18 }} /></span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="mt-3 glass rounded-2xl p-5 flex items-center justify-between">
+        <div>
+          <div className="text-[14px] font-semibold text-white">Sign out</div>
+          <div className="text-[12px] text-slate-500 mt-0.5">End this session on {user.email}</div>
+        </div>
+        <Button onClick={logout} variant="outline" className="border-[#FF4D4D]/40 text-[#FF4D4D] hover:bg-[#FF4D4D]/10"><LogOut size={14} className="mr-1.5" /> Sign out</Button>
       </div>
     </div>
   );
 }
 
-/* -------------------------------- Settings -------------------------------- */
-export function SettingsView() {
-  const { user } = useExchange();
-  const [twoFA, setTwoFA] = useState(true);
-  const [antiPhish, setAntiPhish] = useState(true);
-  const [emailAlerts, setEmailAlerts] = useState(true);
-  const [pushAlerts, setPushAlerts] = useState(false);
-  const [apiKeyVisible, setApiKeyVisible] = useState(false);
+/* ------------------------------ Support ------------------------------ */
+
+interface SMsg { id: string; sender: 'USER' | 'ADMIN'; body: string; createdAt: string }
+
+export function SupportView() {
+  const { user } = useSession();
+  const [messages, setMessages] = useState<SMsg[]>([]);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const endRef = useRef<HTMLDivElement>(null);
+
+  const load = useCallback(() => {
+    if (!user) return;
+    api<{ thread: { messages: SMsg[] } }>('/api/support').then(d => setMessages(d.thread.messages)).catch(() => {});
+  }, [user]);
+
+  useEffect(() => { load(); const iv = setInterval(load, 4000); return () => clearInterval(iv); }, [load]);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages.length]);
+
+  if (!user) return <Gate note="Chat with the BlockExchange Support desk." />;
+
+  const send = async () => {
+    const body = text.trim();
+    if (!body) return;
+    setBusy(true);
+    try {
+      await api('/api/support', { method: 'POST', body: JSON.stringify({ body }) });
+      setText(''); load();
+    } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
+  };
 
   return (
-    <div className="p-3 md:p-5 space-y-4 max-w-[1200px] mx-auto">
-      <div>
-        <h1 className="font-[family-name:var(--font-display)] text-xl md:text-2xl font-bold">Settings</h1>
-        <p className="text-[12px] text-muted-foreground mt-0.5">Account, security and platform preferences</p>
+    <div className="max-w-3xl mx-auto p-4 md:p-6 animate-in flex flex-col" style={{ minHeight: 'calc(100vh - 8rem)' }}>
+      <div className="glass rounded-2xl p-4 flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-[#00A3FF]/12 grid place-items-center"><LifeBuoy size={18} className="text-[#00A3FF]" /></div>
+        <div>
+          <div className="text-[14px] font-semibold text-white">BlockExchange Support</div>
+          <div className="text-[11px] text-slate-500 flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-[#00FF88] pulse-dot" /> Typically replies within minutes</div>
+        </div>
       </div>
-
-      <div className="grid lg:grid-cols-2 gap-3">
-        <GlassCard className="space-y-3.5">
-          <SectionTitle title="Profile" sub="Account identity" icon={<IdCard size={15} />} />
-          {[['Full name', user.name], ['Email', user.email], ['Account tier', `${user.tier} · member since ${new Date(user.joinedAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}`]].map(([k, v]) => (
-            <div key={k} className="flex items-center justify-between rounded-lg bg-[#0B1A30]/60 border hairline px-3.5 py-2.5">
-              <span className="text-[11.5px] text-muted-foreground">{k}</span>
-              <span className="text-[12px] font-medium">{v}</span>
+      <div className="mt-3 glass rounded-2xl p-4 flex-1 overflow-y-auto thin-scrollbar max-h-[52vh]">
+        {messages.length === 0 && <div className="text-center text-slate-500 text-[13px] py-10">Start a conversation with our support desk.</div>}
+        <div className="space-y-2.5">
+          {messages.map(m => (
+            <div key={m.id} className={`flex ${m.sender === 'USER' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-[13px] leading-relaxed ${m.sender === 'USER' ? 'bg-[#00A3FF]/15 text-white shadow-[inset_0_0_0_1px_rgba(0,163,255,0.25)]' : 'bg-white/[0.05] text-slate-200'}`}>
+                {m.body}
+                <div className="mt-1 text-[9.5px] text-slate-500">{timeAgo(m.createdAt)}</div>
+              </div>
             </div>
           ))}
-          <Button variant="outline" size="sm" className="h-8 text-[11.5px] border-[#00A3FF]/40 text-[#33B5FF]">Edit profile</Button>
-        </GlassCard>
-
-        <GlassCard className="space-y-3.5">
-          <SectionTitle title="Security" sub="Protect your account" icon={<Lock size={15} />} />
-          {[
-            { icon: <KeyRound size={14} />, label: 'Two-Factor Authentication', desc: 'Google Authenticator', value: twoFA, set: setTwoFA },
-            { icon: <ShieldCheck size={14} />, label: 'Anti-Phishing Code', desc: 'Shows in all official emails', value: antiPhish, set: setAntiPhish },
-            { icon: <Mail size={14} />, label: 'Login & trade alerts', desc: 'Email on new login/order', value: emailAlerts, set: setEmailAlerts },
-          ].map(row => (
-            <div key={row.label} className="flex items-center justify-between rounded-lg bg-[#0B1A30]/60 border hairline px-3.5 py-2.5">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <span className="text-[#33B5FF]">{row.icon}</span>
-                <div className="min-w-0"><p className="text-[12px] font-medium">{row.label}</p><p className="text-[10px] text-muted-foreground truncate">{row.desc}</p></div>
-              </div>
-              <Switch checked={row.value} onCheckedChange={v => { row.set(v); toast.success(`${row.label} ${v ? 'enabled' : 'disabled'}`); }} />
-            </div>
-          ))}
-        </GlassCard>
-
-        <GlassCard className="p-0 overflow-hidden">
-          <div className="px-4 py-3 border-b hairline flex items-center gap-2"><Monitor size={14} className="text-[#33B5FF]" /><p className="text-[13.5px] font-semibold font-[family-name:var(--font-display)]">Active Sessions</p></div>
-          <div className="divide-y hairline/60">
-            {[
-              { icon: <Monitor size={13} />, device: 'Chrome · macOS', loc: 'Karachi, PK · 103.22.x.x', time: 'Current session', current: true },
-              { icon: <Smartphone size={13} />, device: 'BLOCKEXCHANGE App · iOS', loc: 'Dubai, AE · 94.20.x.x', time: '2h ago', current: false },
-              { icon: <Globe size={13} />, device: 'Safari · iPad', loc: 'London, UK · 51.10.x.x', time: '3 days ago', current: false },
-            ].map(s => (
-              <div key={s.device} className="px-4 py-3 flex items-center gap-3">
-                <span className="text-[#33B5FF]">{s.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[12px] font-medium">{s.device} {s.current && <Tag color="green" className="ml-1">Active</Tag>}</p>
-                  <p className="text-[10.5px] text-muted-foreground">{s.loc} · {s.time}</p>
-                </div>
-                {!s.current && <button className="text-[10.5px] text-[#FF6B6B] hover:underline" onClick={() => toast.success('Session revoked')}>Revoke</button>}
-              </div>
-            ))}
-          </div>
-        </GlassCard>
-
-        <GlassCard className="space-y-3.5">
-          <SectionTitle title="API Management" sub="Programmatic trading access" icon={<Settings2 size={15} />} />
-          <div className="rounded-lg bg-[#0B1A30]/60 border hairline px-3.5 py-2.5">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">API Key</p>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 text-[11px] text-slate-300 truncate">{apiKeyVisible ? 'bx_live_8f42a1c9d7e3b6042f18' : 'bx_live_••••••••••••••••••••'}</code>
-              <button className="text-[10.5px] text-[#33B5FF] hover:underline" onClick={() => setApiKeyVisible(v => !v)}>{apiKeyVisible ? 'Hide' : 'Show'}</button>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2 text-[11px]">
-            <div className="rounded-lg border hairline px-3 py-2"><p className="text-muted-foreground text-[9.5px] uppercase">Permissions</p><p className="mt-0.5">Read · Spot · Futures</p></div>
-            <div className="rounded-lg border hairline px-3 py-2"><p className="text-muted-foreground text-[9.5px] uppercase">IP whitelist</p><p className="mt-0.5">3 addresses</p></div>
-          </div>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" className="h-8 text-[11px] border-[#00A3FF]/40 text-[#33B5FF]" onClick={() => toast.success('New API key generated')}>Create key</Button>
-            <Button size="sm" variant="outline" className="h-8 text-[11px] border-[#FF4D4D]/40 text-[#FF6B6B]" onClick={() => toast.success('API key revoked')}>Revoke all</Button>
-          </div>
-          <div className="flex items-center justify-between rounded-lg bg-[#0B1A30]/60 border hairline px-3.5 py-2.5">
-            <div className="flex items-center gap-2.5"><Bell size={14} className="text-[#FFD35C]" /><p className="text-[12px] font-medium">Price & fill push alerts</p></div>
-            <Switch checked={pushAlerts} onCheckedChange={setPushAlerts} />
-          </div>
-        </GlassCard>
+          <div ref={endRef} />
+        </div>
+      </div>
+      <div className="mt-3 glass rounded-2xl p-3 flex gap-2">
+        <Input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+          placeholder="Describe your issue…" className="h-11 bg-white/[0.04] border-white/10" disabled={busy} />
+        <Button onClick={send} disabled={busy || !text.trim()} size="icon" className="w-11 h-11 bg-[#00A3FF] text-[#04101F] hover:brightness-110 shrink-0">{busy ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}</Button>
       </div>
     </div>
   );

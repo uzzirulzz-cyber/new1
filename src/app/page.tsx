@@ -1,62 +1,73 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { ExchangeProvider, useExchange } from '@/lib/store';
-import { AppShell } from '@/components/layout';
+import React, { useEffect, useState } from 'react';
+import { SessionProvider } from '@/lib/session';
+import { CustomerShell, viewFromPath, type View } from '@/components/shell';
 
-import HomeView from '@/components/views/home';
-import DashboardView from '@/components/views/dashboard';
-import MarketsView from '@/components/views/markets';
-import SpotTradeView from '@/components/views/spot-trade';
-import FuturesTradeView from '@/components/views/futures-trade';
-import OptionsTradeView from '@/components/views/options-trade';
-import CopyTradingView from '@/components/views/copy-trading';
-import { StakingView, LaunchpadView } from '@/components/views/earn';
-import { WalletView, DepositView, WithdrawView, TransactionsView } from '@/components/views/wallet';
-import PortfolioView from '@/components/views/portfolio';
-import { KycView, AffiliateView, SupportView, SettingsView } from '@/components/views/account';
-import AuthView from '@/components/views/auth';
-import AdminView from '@/components/views/admin';
+import { HomeView } from '@/components/views/home';
+import { MarketsView, WatchlistView } from '@/components/views/markets';
+import { TradeView } from '@/components/views/trade';
+import { AssetsView, DepositView, WithdrawView, WalletView, HistoryView } from '@/components/views/funds';
+import { ProfileView, NotificationsView, SettingsView, SupportView } from '@/components/views/account';
+import { LoginView, SignupView, StaffLoginView } from '@/components/views/auth';
+import { AdminView, AgentView } from '@/components/staff/views';
 
 function Router() {
-  const { route } = useExchange();
+  const [view, setView] = useState<View>('home');
 
-  const view = (() => {
-    switch (route) {
-      case 'home': return <HomeView />;
-      case 'dashboard': return <DashboardView />;
-      case 'markets': return <MarketsView />;
-      case 'trade-spot': return <SpotTradeView />;
-      case 'trade-futures': return <FuturesTradeView />;
-      case 'trade-options': return <OptionsTradeView />;
-      case 'copy': return <CopyTradingView />;
-      case 'staking': return <StakingView />;
-      case 'launchpad': return <LaunchpadView />;
-      case 'wallet': return <WalletView />;
-      case 'deposit': return <DepositView />;
-      case 'withdraw': return <WithdrawView />;
-      case 'transactions': return <TransactionsView />;
-      case 'portfolio': return <PortfolioView />;
-      case 'kyc': return <KycView />;
-      case 'affiliate': return <AffiliateView />;
-      case 'support': return <SupportView />;
-      case 'settings': return <SettingsView />;
-      case 'admin': return <AdminView />;
-      case 'login': return <AuthView mode="login" />;
-      case 'signup': return <AuthView mode="signup" />;
-      default: return <HomeView />;
+  useEffect(() => {
+    const apply = () => setView(viewFromPath(window.location.pathname));
+    // migrate legacy #/ hash links from v1
+    const legacy = window.location.hash.replace(/^#\/?/, '').replace(/\/+$/, '');
+    if (legacy) {
+      const map: Record<string, string> = {
+        dashboard: '/assets', markets: '/markets', 'trade-spot': '/trade',
+        'trade-futures': '/trade', 'trade-options': '/trade', copy: '/markets',
+        staking: '/assets', launchpad: '/markets', wallet: '/wallet',
+        deposit: '/deposit', withdraw: '/withdraw', transactions: '/wallet',
+        portfolio: '/assets', kyc: '/profile', affiliate: '/support',
+        support: '/support', settings: '/settings', login: '/login', signup: '/signup', admin: '/admin',
+      };
+      const target = map[legacy];
+      if (target) window.history.replaceState(null, '', target);
     }
-  })();
+    apply();
+    window.addEventListener('popstate', apply);
+    return () => window.removeEventListener('popstate', apply);
+  }, []);
 
-  return <AppShell>{view}</AppShell>;
+  if (view === 'admin') return <AdminView />;
+  if (view === 'agent') return <AgentView />;
+  if (view === 'login') return <LoginView />;
+  if (view === 'signup') return <SignupView />;
+  if (view === 'staff-login') return <StaffLoginView />;
+
+  return (
+    <CustomerShell view={view}>
+      {view === 'home' && <HomeView />}
+      {view === 'markets' && <MarketsView />}
+      {view === 'watchlist' && <WatchlistView />}
+      {view === 'trade' && <TradeView />}
+      {view === 'assets' && <AssetsView />}
+      {view === 'deposit' && <DepositView />}
+      {view === 'withdraw' && <WithdrawView />}
+      {view === 'wallet' && <WalletView />}
+      {view === 'history' && <HistoryView />}
+      {view === 'profile' && <ProfileView />}
+      {view === 'notifications' && <NotificationsView />}
+      {view === 'settings' && <SettingsView />}
+      {view === 'support' && <SupportView />}
+    </CustomerShell>
+  );
 }
 
 const App = dynamic(() => Promise.resolve(Router), { ssr: false });
 
 export default function Page() {
   return (
-    <ExchangeProvider>
+    <SessionProvider>
       <App />
-    </ExchangeProvider>
+    </SessionProvider>
   );
 }

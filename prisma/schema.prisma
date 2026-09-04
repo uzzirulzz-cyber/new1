@@ -1,32 +1,313 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("NEON_DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  SUB_AGENT
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum AccountStatus {
+  ACTIVE
+  FROZEN
+}
+
+enum TxType {
+  DEPOSIT
+  WITHDRAWAL
+  TRADE_STAKE
+  TRADE_PAYOUT
+  ADMIN_CREDIT
+  ADMIN_DEBIT
+  FREEZE
+  UNFREEZE
+}
+
+enum TxStatus {
+  PENDING
+  COMPLETED
+  REJECTED
+  ON_HOLD
+}
+
+enum TradeDirection {
+  UP
+  DOWN
+}
+
+enum TradeResult {
+  PENDING
+  WON
+  LOST
+  REFUND
+}
+
+enum DepositStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum WithdrawStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  ON_HOLD
+}
+
+enum NotifType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+}
+
+enum MsgSender {
+  USER
+  ADMIN
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String        @id @default(cuid())
+  uid                String        @unique
+  email              String        @unique
+  passwordHash       String
+  name               String
+  phone              String?
+  country            String?
+  role               Role          @default(CUSTOMER)
+  vipLevel           Int           @default(0)
+  kycStatus          String        @default("UNVERIFIED")
+  status             AccountStatus @default(ACTIVE)
+  mustChangePassword Boolean       @default(false)
+  walletLocked       Boolean       @default(false)
+  invitedById        String?
+  invitationCode     String?       @unique
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  lastLoginAt        DateTime?
+
+  wallet        Wallet?
+  trades        Trade[]
+  deposits      Deposit[]
+  withdrawals   Withdrawal[]
+  transactions  Transaction[]
+  notifications Notification[]
+  loginLogs     LoginLog[]
+  sessions      Session[]
+  inviteCodes   InvitationCode[] @relation("CodeOwner")
+  invitedBy     User?            @relation("Inviter", fields: [invitedById], references: [id])
+  invitees      User[]           @relation("Inviter")
+  thread        SupportThread?
+  auditLogs     AuditLog[]
+
+  @@index([role])
+  @@index([invitedById])
 }
 
-model Post {
+model Wallet {
   id        String   @id @default(cuid())
-  title     String
-  content   String?
-  published Boolean  @default(false)
-  authorId  String
-  createdAt DateTime @default(now())
+  userId    String   @unique
+  balance   Float    @default(0)
+  frozen    Float    @default(0)
   updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Market {
+  id         String  @id @default(cuid())
+  symbol     String  @unique
+  name       String
+  category   String  @default("Majors")
+  basePrice  Float
+  volatility Float   @default(1)
+  payoutRate Float   @default(0.85)
+  active     Boolean @default(true)
+  sortOrder  Int     @default(0)
+  trendBias Float   @default(0)
+}
+
+model Trade {
+  id         String         @id @default(cuid())
+  userId     String
+  symbol     String
+  direction  TradeDirection
+  amount     Float
+  duration   Int
+  entryPrice Float
+  exitPrice  Float?
+  payoutRate Float
+  result     TradeResult    @default(PENDING)
+  profit     Float          @default(0)
+  openedAt   DateTime       @default(now())
+  expiresAt  DateTime
+  settledAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, result])
+  @@index([result, expiresAt])
+}
+
+model Deposit {
+  id         String        @id @default(cuid())
+  userId     String
+  method     String
+  amount     Float
+  reference  String?
+  status     DepositStatus @default(PENDING)
+  createdAt  DateTime      @default(now())
+  reviewedAt DateTime?
+  reviewedBy String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Withdrawal {
+  id         String        @id @default(cuid())
+  userId     String
+  method     String
+  address    String
+  amount     Float
+  status     WithdrawStatus @default(PENDING)
+  createdAt  DateTime      @default(now())
+  reviewedAt DateTime?
+  reviewedBy String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Transaction {
+  id        String   @id @default(cuid())
+  userId    String
+  type      TxType
+  amount    Float
+  status    TxStatus @default(COMPLETED)
+  reference String?
+  detail    String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model Notification {
+  id        String     @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  type      NotifType  @default(INFO)
+  read      Boolean    @default(false)
+  createdAt DateTime   @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+}
+
+model SupportThread {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  subject       String    @default("BlockExchange Support")
+  unreadForAdmin Boolean  @default(false)
+  unreadForUser Boolean   @default(false)
+  lastMessageAt DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages SupportMessage[]
+}
+
+model SupportMessage {
+  id        String    @id @default(cuid())
+  threadId  String
+  sender    MsgSender
+  body      String
+  createdAt DateTime  @default(now())
+
+  thread SupportThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+}
+
+model LoginLog {
+  id        String   @id @default(cuid())
+  userId    String
+  ip        String?
+  userAgent String?
+  success   Boolean
+  detail    String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String
+  action    String
+  target    String?
+  detail    String?
+  createdAt DateTime @default(now())
+
+  actor User @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([actorId, createdAt])
+}
+
+model InvitationCode {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  ownerId   String
+  active    Boolean  @default(true)
+  usesCount Int      @default(0)
+  createdAt DateTime @default(now())
+
+  owner User @relation("CodeOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+}
+
+model Setting {
+  key   String @id
+  value String
+}
+
+model WatchItem {
+  id        String   @id @default(cuid())
+  userId    String
+  symbol    String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, symbol])
+  @@index([userId])
 }
