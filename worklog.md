@@ -80,3 +80,17 @@ Stage Summary:
 - Repository live at https://github.com/uzzirulzz-cyber/new1 (branch main, commit 621d421).
 - All spec features verified working: auth, binary trading engine, wallet, admin 10 modules, sub-agent isolation.
 - Test credentials: trader@demo.io/Demo@2024, admin@blockexchange.io (password was changed to SuperAdmin#2026 during testing; re-seed if locked out), agent.maya@blockexchange.io/Agent@2024.
+
+---
+Task ID: 3-creds
+Agent: Super Z (main agent)
+Task: Answer admin credentials question; fix NEON_DATABASE_URL loss after server recycle.
+
+Work Log:
+- Staff login E2E verified: admin@blockexchange.io/SuperAdmin#2026 (SUPER_ADMIN, 200), staff@blockexchange.io/Staff@2024 (ADMIN, first-login forced change), agent.maya@blockexchange.io/Agent@2024 (SUB_AGENT, 200). Endpoint: /api/staff/login (customer /api/auth/login correctly rejects staff roles).
+- Root-caused 500 on restart: NEON_DATABASE_URL only existed in recycled shell env. Persisted it in .env (gitignored, never pushed). Added .env.example (force-added past .env* rule) documenting the var for deployments.
+- Suppressed sandbox filemode noise (core.filemode false). Pushed 621d421..5f8ff61 to new1.git, remote verified.
+
+Stage Summary:
+- Admin portal: /staff/login — admin@blockexchange.io / SuperAdmin#2026.
+- DB config now persistent via .env; repo ships .env.example for deployment setup.
