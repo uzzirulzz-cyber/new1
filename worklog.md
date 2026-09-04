@@ -21,3 +21,23 @@ Stage Summary:
 - Deliverable: runnable Next.js 16 BLOCKEXCHANGE trading platform on port 3000, entry src/app/page.tsx.
 - Key decisions: SPA with hash routing (preview constraint: only / visible); client-side simulation engine instead of external APIs; custom canvas charts for full control of neon aesthetic; user's uploaded logo embedded at public/blockexchange-logo.png.
 - Verified: 0 lint errors, all routes render, core trading/deposit/stake/copy/login flows interactive end-to-end.
+
+---
+Task ID: 2
+Agent: Super Z (main agent)
+Task: Push BLOCKEXCHANGE to uzzirulzz-cyber/Institutional + fix URL indexing (/storefront, /admin, /signup).
+
+Work Log:
+- Cloned target repo: EMPTY. Confirmed intent = publish current project there.
+- Converted hash routing (#/dashboard) to real pathname URLs in src/lib/store.tsx: ROUTE_PATHS map (20 routes incl. /trade/spot nested paths), navigate() via history.pushState, popstate listener, legacy #/ URLs auto-migrated via replaceState.
+- next.config.ts: afterFiles rewrites serve SPA for all 20 platform paths; redirects: /storefront /store /shop /products -> 308 /markets, /index.html -> /.
+- SEO: layout metadataBase + canonical + OG/Twitter; new src/app/sitemap.ts (19 indexable URLs); new src/app/robots.ts (Disallow /admin /settings /wallet /api, Sitemap ref); removed conflicting static public/robots.txt (500 fix).
+- Browser verification (agent-browser): /signup renders signup form, /admin renders admin shell, /trade/spot renders terminal, /copy-trading renders leaderboard; /storefront -> URL bar /markets; CTA click -> /dashboard real URL; sidebar nav -> /markets real URL; back/forward popstate OK; zero page errors.
+- Git: committed fix (19a053a), added remote origin -> uzzirulzz-cyber/Institutional.git. Push blocked: no GitHub credentials in sandbox (git could not read Username).
+- Fallback deliverable: download/blockexchange-institutional-urlfix.zip (full project, node_modules excluded).
+
+Stage Summary:
+- All 20 platform URLs are now real, directly linkable, indexable paths (no hash fragments).
+- /storefront 308-redirects to /markets (e-commerce removal honored, URL fixed, link equity preserved).
+- /admin /settings /wallet are crawl-disallowed (institutional security practice); all other routes indexed via sitemap.xml.
+- Push pending user credentials: git push -u origin main from /home/z/my-project with a PAT, or upload the provided zip.
