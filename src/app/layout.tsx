@@ -20,16 +20,33 @@ const display = Space_Grotesk({
   weight: ["400", "500", "600", "700"],
 });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://blockexchange.io";
+
 export const metadata: Metadata = {
-  title: "BLOCKEXCHANGE — Institutional Crypto Trading Platform",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "BLOCKEXCHANGE — Institutional AI-Powered Crypto Trading Platform",
+    template: "%s | BLOCKEXCHANGE",
+  },
   description:
     "BLOCKEXCHANGE is a premium institutional-grade cryptocurrency exchange: spot, futures, options, copy trading, staking and launchpad with real-time analytics and enterprise security.",
-  keywords: ["crypto exchange", "spot trading", "futures", "options", "copy trading", "staking", "launchpad", "BLOCKEXCHANGE"],
+  keywords: ["crypto exchange", "spot trading", "futures", "options", "copy trading", "staking", "launchpad", "institutional crypto", "BLOCKEXCHANGE"],
+  alternates: { canonical: "/" },
+  robots: { index: true, follow: true, googleBot: { index: true, follow: true } },
   icons: { icon: "/blockexchange-logo.png" },
   openGraph: {
     title: "BLOCKEXCHANGE — Trade. Invest. Grow.",
-    description: "Institutional-grade cryptocurrency trading platform",
+    description: "Institutional-grade AI-powered cryptocurrency trading platform",
+    url: SITE_URL,
+    siteName: "BLOCKEXCHANGE",
     type: "website",
+    images: [{ url: "/blockexchange-logo.png", width: 512, height: 512, alt: "BLOCKEXCHANGE" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "BLOCKEXCHANGE — Institutional AI-Powered Crypto Trading",
+    description: "Spot · Futures · Options · Copy Trading · Staking — enterprise security, real-time analytics.",
+    images: ["/blockexchange-logo.png"],
   },
 };
 

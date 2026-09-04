@@ -11,6 +11,40 @@ export type Route =
   | 'copy' | 'staking' | 'launchpad' | 'wallet' | 'deposit' | 'withdraw' | 'transactions'
   | 'portfolio' | 'kyc' | 'affiliate' | 'support' | 'settings' | 'login' | 'signup' | 'admin';
 
+/** Real, indexable URL path for every route (replaces legacy hash URLs). */
+export const ROUTE_PATHS: Record<Route, string> = {
+  home: '/',
+  dashboard: '/dashboard',
+  markets: '/markets',
+  'trade-spot': '/trade/spot',
+  'trade-futures': '/trade/futures',
+  'trade-options': '/trade/options',
+  copy: '/copy-trading',
+  staking: '/staking',
+  launchpad: '/launchpad',
+  wallet: '/wallet',
+  deposit: '/deposit',
+  withdraw: '/withdraw',
+  transactions: '/transactions',
+  portfolio: '/portfolio',
+  kyc: '/kyc',
+  affiliate: '/affiliate',
+  support: '/support',
+  settings: '/settings',
+  login: '/login',
+  signup: '/signup',
+  admin: '/admin',
+};
+
+const PATH_TO_ROUTE: Record<string, Route> = Object.fromEntries(
+  (Object.entries(ROUTE_PATHS) as [Route, string][]).map(([r, p]) => [p, r]),
+);
+
+export function routeFromPath(pathname: string): Route {
+  const p = ('/' + pathname.replace(/^\/+|\/+$/g, '')).replace(/\/+$/, '') || '/';
+  return PATH_TO_ROUTE[p] ?? 'home';
+}
+
 export interface Order {
   id: string; pairId: string; symbol: string; type: 'Limit' | 'Market' | 'Stop' | 'OCO';
   side: 'Buy' | 'Sell'; price: number; amount: number; filled: number;
@@ -102,7 +136,9 @@ const seedNotifs = (): Notif[] => [
 ];
 
 export function ExchangeProvider({ children }: { children: React.ReactNode }) {
-  const [route, setRoute] = useState<Route>('home');
+  const [route, setRoute] = useState<Route>(() =>
+    typeof window !== 'undefined' ? routeFromPath(window.location.pathname) : 'home',
+  );
   const [loggedIn, setLoggedIn] = useState(true);
   const [authView, setAuthView] = useState<'login' | 'signup'>('login');
   const [pairs, setPairs] = useState<MarketPair[]>(() => PAIRS.map(p => ({ ...p })));
@@ -146,18 +182,25 @@ export function ExchangeProvider({ children }: { children: React.ReactNode }) {
 
   const navigate = useCallback((r: Route) => {
     setRoute(r);
-    try { window.location.hash = `#/${r === 'home' ? '' : r}`; } catch { /* noop */ }
+    try {
+      const path = ROUTE_PATHS[r];
+      if (window.location.pathname !== path) window.history.pushState(null, '', path);
+    } catch { /* noop */ }
     if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
   }, []);
 
   useEffect(() => {
-    const applyHash = () => {
-      const h = window.location.hash.replace(/^#\/?/, '') as Route;
-      if (h) setRoute(h);
-    };
-    applyHash();
-    window.addEventListener('hashchange', applyHash);
-    return () => window.removeEventListener('hashchange', applyHash);
+    // Real pathname routing — every route is a directly linkable, indexable URL
+    const applyPath = () => setRoute(routeFromPath(window.location.pathname));
+    // Migrate legacy hash URLs (#/dashboard → /dashboard) so old links keep working
+    const legacy = window.location.hash.replace(/^#\/?/, '').replace(/\/+$/, '');
+    if (legacy) {
+      const mapped = PATH_TO_ROUTE[`/${legacy}`];
+      if (mapped) window.history.replaceState(null, '', ROUTE_PATHS[mapped]);
+    }
+    applyPath();
+    window.addEventListener('popstate', applyPath);
+    return () => window.removeEventListener('popstate', applyPath);
   }, []);
 
   // seed candle/book/trade data once
@@ -213,7 +256,7 @@ export function ExchangeProvider({ children }: { children: React.ReactNode }) {
     navigate('dashboard');
   }, [navigate]);
 
-  const logout = useCallback(() => { setLoggedIn(false); setRoute('home'); }, []);
+  const logout = useCallback(() => { setLoggedIn(false); navigate('home'); }, [navigate]);
 
   const deposit = useCallback((asset: string, amount: number) => {
     setBalances(b => ({ ...b, [asset]: { free: (b[asset]?.free ?? 0) + amount, locked: b[asset]?.locked ?? 0 } }));
