@@ -110,3 +110,20 @@ Work Log:
 Stage Summary:
 - Login works for all roles; wrong-portal attempts now self-heal with redirect + prefill instead of dead-ending.
 - If preview shows an error page, it is a recycled dev server — next message in session revives it; hard-refresh after.
+
+---
+Task ID: 3-regression
+Agent: Super Z (main agent)
+Task: Final all-roles regression sweep (user approved).
+
+Work Log:
+- Root-caused recurring 500s after server recycles: sandbox bootstrap REWRITES .env on session start, wiping NEON_DATABASE_URL. Fix: moved DB URL to .env.local (higher Next.js priority, not touched by bootstrap, gitignored). Verified durable across restart.
+- Wrote scripts/regression.ts: 36 assertions across 12 sections, cookie-jar per role.
+- First run 29/36: all 7 failures were script bugs (method name 'USDT TRC-20' not 'USDT_TRC20', payments kind lowercase 'deposit'/'withdrawal', /api/auth/me returns 200+{user:null} for guests by design). No app bugs.
+- Final run: 36/36 PASSED — guest guards, auth, candles, trade execution (stake deducted exactly), 30s settlement, deposit->admin approve->credited exactly, withdraw->frozen->approve->released, admin stats/users/CREDIT/FREEZE/UNFREEZE/security/reports, sub-agent isolation (Maya sees Ali, NOT Victor's John), staff mustChangePassword, logout.
+- Browser UI money-flow: customer login -> /trade terminal -> BUY UP $50 click -> trade executed + settled (visible in history). Exit<entry so LOST is valid engine output.
+- Pushed 8a3fa12..4233fb3 to new1.git.
+
+Stage Summary:
+- Platform passes full all-roles regression. DB config now survives session recycles via .env.local.
+- Customer wallet after test flows: 16120.50 (consistent exact math throughout).
