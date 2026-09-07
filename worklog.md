@@ -127,3 +127,18 @@ Work Log:
 Stage Summary:
 - Platform passes full all-roles regression. DB config now survives session recycles via .env.local.
 - Customer wallet after test flows: 16120.50 (consistent exact math throughout).
+
+---
+Task ID: 3-showcase
+Agent: Super Z (main agent)
+Task: Customer storefront + admin dashboard highlight images (4:3 and 1:1), local-only, NOT pushed to GitHub.
+
+Work Log:
+- Captured 6 live screenshots via agent-browser (1600x1000): guest home, markets, trade terminal, wallet, admin dashboard (retaken after loading state), admin user management.
+- Composed two branded showcase images with PIL (scripts/make_showcase.py): platform dark/neon design, logo header, labeled panels with CUSTOMER (blue) / ADMIN (gold) chips, highlight footer/bullets.
+  - download/BLOCKEXCHANGE-showcase-4x3.png (1600x1200): storefront, trade terminal, admin dashboard, admin users + 6 feature chips.
+  - download/BLOCKEXCHANGE-showcase-1x1.png (1440x1440): storefront, binary terminal, admin dashboard, customer wallet + WHY BLOCKEXCHANGE bullets.
+- Git protection: added download/*.png and scripts/shots/ to .gitignore; verified check-ignore passes; pushed only the gitignore+script (7178ad5); confirmed remote tree contains NO PNGs.
+
+Stage Summary:
+- Deliverables: the two PNG files in download/ only. GitHub repo contains no images.
