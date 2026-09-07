@@ -56,3 +56,6 @@ server.log
 # showcase images — local only, never push to GitHub
 download/*.png
 scripts/shots/
+
+# project explainer pack — local only
+download/BLOCKEXCHANGE-project-explainer.zip
